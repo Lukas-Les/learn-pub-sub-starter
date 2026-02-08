@@ -2,70 +2,47 @@ package main
 
 import (
 	"fmt"
-	"github.com/Lukas-Les/learn-pub-sub-starter/internal/gamelogic"
-	"github.com/Lukas-Les/learn-pub-sub-starter/internal/routing"
-	amqp "github.com/rabbitmq/amqp091-go"
+	"log"
 	"os"
 	"os/signal"
-)
 
-type SimpleQueueType = int
-
-const (
-	durable SimpleQueueType = iota
-	transient
+	"github.com/Lukas-Les/learn-pub-sub-starter/internal/gamelogic"
+	"github.com/Lukas-Les/learn-pub-sub-starter/internal/pubsub"
+	"github.com/Lukas-Les/learn-pub-sub-starter/internal/routing"
+	amqp "github.com/rabbitmq/amqp091-go"
 )
 
 func main() {
-	connectionString := "amqp://guest:guest@localhost:5672/"
-	conn, err := amqp.Dial(connectionString)
+	fmt.Println("Starting Peril client...")
+	const rabbitConnString = "amqp://guest:guest@localhost:5672/"
+
+	conn, err := amqp.Dial(rabbitConnString)
 	if err != nil {
-		fmt.Print(err.Error())
-		return
+		log.Fatalf("could not connect to RabbitMQ: %v", err)
 	}
 	defer conn.Close()
-	fmt.Println("Connected to amqp")
-	fmt.Println("Starting Peril client...")
+	fmt.Println("Peril game client connected to RabbitMQ!")
+
 	username, err := gamelogic.ClientWelcome()
 	if err != nil {
-		fmt.Print(err.Error())
-		return
+		log.Fatalf("could not get username: %v", err)
 	}
-	fmt.Printf("Hello, %s", username)
-	queueName := fmt.Sprintf("%s.%s", routing.PauseKey, username)
-	_, _, err = DeclareAndBind(conn, "peril_direct", queueName, "pause", transient)
+
+	_, queue, err := pubsub.DeclareAndBind(
+		conn,
+		routing.ExchangePerilDirect,
+		routing.PauseKey+"."+username,
+		routing.PauseKey,
+		pubsub.SimpleQueueTransient,
+	)
 	if err != nil {
-		fmt.Print(err.Error())
-		return
+		log.Fatalf("could not subscribe to pause: %v", err)
 	}
+	fmt.Printf("Queue %v declared and bound!\n", queue.Name)
+
 	// wait for ctrl+c
 	signalChan := make(chan os.Signal, 1)
 	signal.Notify(signalChan, os.Interrupt)
 	<-signalChan
-}
-
-func DeclareAndBind(
-	conn *amqp.Connection,
-	exchange,
-	queueName,
-	key string,
-	queueType SimpleQueueType, // an enum to represent "durable" or "transient"
-) (*amqp.Channel, amqp.Queue, error) {
-	ch, err := conn.Channel()
-	if err != nil {
-		fmt.Print(err.Error())
-		return &amqp.Channel{}, amqp.Queue{}, err
-	}
-	isDurable := queueType == durable
-	queue, err := ch.QueueDeclare(queueName, isDurable, !isDurable, !isDurable, false, nil)
-	if err != nil {
-		fmt.Print(err.Error())
-		return &amqp.Channel{}, amqp.Queue{}, err
-	}
-	err = ch.QueueBind(queueName, key, exchange, false, nil)
-	if err != nil {
-		fmt.Print(err.Error())
-		return &amqp.Channel{}, amqp.Queue{}, err
-	}
-	return ch, queue, nil
+	fmt.Println("RabbitMQ connection closed.")
 }
