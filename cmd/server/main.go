@@ -27,14 +27,15 @@ func main() {
 	}
 
 	gamelogic.PrintServerHelp()
+
 	for {
-		input := gamelogic.GetInput()
-		if len(input) == 0 {
+		words := gamelogic.GetInput()
+		if len(words) == 0 {
 			continue
 		}
-
-		if input[0] == "pause" {
-			fmt.Println("Sending a pause message")
+		switch words[0] {
+		case "pause":
+			fmt.Println("Publishing paused game state")
 			err = pubsub.PublishJSON(
 				publishCh,
 				routing.ExchangePerilDirect,
@@ -46,9 +47,8 @@ func main() {
 			if err != nil {
 				log.Printf("could not publish time: %v", err)
 			}
-			fmt.Println("Pause message sent!")
-		} else if input[0] == "resume" {
-			fmt.Println("Sending a pause message")
+		case "resume":
+			fmt.Println("Publishing resumes game state")
 			err = pubsub.PublishJSON(
 				publishCh,
 				routing.ExchangePerilDirect,
@@ -60,12 +60,11 @@ func main() {
 			if err != nil {
 				log.Printf("could not publish time: %v", err)
 			}
-			fmt.Println("Unpause message sent!")
-		} else if input[0] == "quit" {
-			fmt.Println("Quitting!")
-			break
-		} else {
-			log.Printf("no such command: %s", input[0])
+		case "quit":
+			log.Println("goodbye")
+			return
+		default:
+			fmt.Println("unknown command")
 		}
 	}
 }
