@@ -30,10 +30,12 @@ func main() {
 		conn,
 		routing.ExchangePerilTopic,
 		fmt.Sprintf("%s", routing.GameLogSlug),
-		"",
+		routing.GameLogSlug+".*",
 		pubsub.SimpleQueueDurable,
 	)
-
+	if err != nil {
+		log.Fatalf("could not declare and bind: %v", err)
+	}
 	gamelogic.PrintServerHelp()
 
 	for {
