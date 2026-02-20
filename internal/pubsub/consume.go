@@ -10,6 +10,12 @@ import (
 
 type Acktype int
 
+const (
+	Ack Acktype = iota
+	NackRequeue
+	NackDiscard
+)
+
 type SimpleQueueType int
 
 const (
@@ -29,13 +35,14 @@ func DeclareAndBind(
 		return nil, amqp.Queue{}, fmt.Errorf("could not create channel: %v", err)
 	}
 
+	queeArgs := amqp.Table{"x-dead-letter-exchange": "peril_dlx"}
 	queue, err := ch.QueueDeclare(
 		queueName,                       // name
 		queueType == SimpleQueueDurable, // durable
 		queueType != SimpleQueueDurable, // delete when unused
 		queueType != SimpleQueueDurable, // exclusive
 		false,                           // no-wait
-		nil,                             // args
+		queeArgs,                        // args
 	)
 	if err != nil {
 		return nil, amqp.Queue{}, fmt.Errorf("could not declare queue: %v", err)
@@ -54,12 +61,22 @@ func DeclareAndBind(
 	return ch, queue, nil
 }
 
-func handleDeliveryChannel[T any](delivs <-chan amqp.Delivery, handler func(T)) {
+func handleDeliveryChannel[T any](delivs <-chan amqp.Delivery, handler func(T) Acktype) {
 	for d := range delivs {
 		var decoded T
 		json.Unmarshal(d.Body, &decoded)
-		handler(decoded)
-		d.Ack(false)
+		ack := handler(decoded)
+		switch ack {
+		case Ack:
+			fmt.Println("ack")
+			d.Ack(false)
+		case NackRequeue:
+			fmt.Println("nack requeue")
+			d.Nack(false, true)
+		case NackDiscard:
+			fmt.Println("nack discard")
+			d.Nack(false, false)
+		}
 	}
 }
 
@@ -69,7 +86,7 @@ func SubscribeJSON[T any](
 	queueName,
 	key string,
 	queueType SimpleQueueType, // an enum to represent "durable" or "transient"
-	handler func(T),
+	handler func(T) Acktype,
 ) error {
 	ch, _, err := DeclareAndBind(conn, exchange, queueName, key, queueType)
 	if err != nil {
