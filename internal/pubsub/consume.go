@@ -99,6 +99,7 @@ func subscribe[T any](
 	if err != nil {
 		return err
 	}
+	ch.Qos(10, 0, false)
 	delCh, err := ch.ConsumeWithContext(context.Background(), queueName, "", false, false, false, false, nil)
 	if err != nil {
 		return err
