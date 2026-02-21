@@ -26,12 +26,8 @@ func main() {
 		log.Fatalf("could not create channel: %v", err)
 	}
 
-	_, _, err = pubsub.DeclareAndBind(
-		conn,
-		routing.ExchangePerilTopic,
-		fmt.Sprintf("%s", routing.GameLogSlug),
-		routing.GameLogSlug+".*",
-		pubsub.SimpleQueueDurable,
+	err = pubsub.SubscribeGob(
+		conn, routing.ExchangePerilTopic, routing.GameLogSlug, routing.GameLogSlug+".*", pubsub.SimpleQueueDurable, handlerGameLog(),
 	)
 	if err != nil {
 		log.Fatalf("could not declare and bind: %v", err)
